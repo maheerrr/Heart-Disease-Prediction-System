@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CardioScan AI — Heart Disease Risk Analyzer</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --crimson:   #C0392B;
+      --crimson-d: #96281B;
+      --crimson-l: #E74C3C;
+      --ink:       #0D1117;
+      --slate:     #1C2333;
+      --panel:     #161B27;
+      --border:    rgba(255,255,255,0.07);
+      --muted:     #8892A4;
+      --text:      #E8EBF0;
+      --success:   #27AE60;
+      --warning:   #F39C12;
+      --danger:    #E74C3C;
+      --card-bg:   rgba(22,27,39,0.85);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--ink);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Noise grain overlay ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+      background-size: 200px;
+      opacity: 0.6;
+    }
+
+    /* ── Background gradient blob ── */
+    .bg-blob {
+      position: fixed; top: -20vh; left: -10vw;
+      width: 60vw; height: 60vh;
+      background: radial-gradient(ellipse at center, rgba(192,57,43,0.18) 0%, transparent 70%);
+      border-radius: 50%; filter: blur(60px); z-index: 0; pointer-events: none;
+      animation: pulse-blob 8s ease-in-out infinite alternate;
+    }
+    @keyframes pulse-blob {
+      0%   { transform: scale(1) translate(0,0); opacity: 0.7; }
+      100% { transform: scale(1.15) translate(4vw, 4vh); opacity: 1; }
+    }
+
+    /* ── Navbar ── */
+    .navbar-brand { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.4rem; letter-spacing: -0.5px; }
+    .nav-pill { font-size: .82rem; font-weight: 500; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 4px 14px; transition: .2s; cursor: pointer; background: transparent; }
+    .nav-pill.active, .nav-pill:hover { background: var(--crimson); color: #fff; border-color: var(--crimson); }
+
+    /* ── Hero ── */
+    .hero { padding: 80px 0 40px; position: relative; z-index: 1; }
+    .hero-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(192,57,43,0.12); border: 1px solid rgba(192,57,43,0.35); border-radius: 999px; padding: 5px 14px; font-size: .78rem; color: var(--crimson-l); font-weight: 500; margin-bottom: 20px; }
+    .hero h1 { font-family: 'Syne', sans-serif; font-size: clamp(2.2rem, 5vw, 3.8rem); font-weight: 800; line-height: 1.1; letter-spacing: -1.5px; }
+    .hero h1 span { color: var(--crimson-l); }
+    .hero p.lead { color: var(--muted); max-width: 560px; font-size: 1.05rem; font-weight: 300; line-height: 1.7; }
+
+    /* ── Cards ── */
+    .glass-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition: border-color .25s;
+    }
+    .glass-card:hover { border-color: rgba(192,57,43,0.4); }
+
+    /* ── Section tabs ── */
+    .section-header { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1rem; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 22px; }
+
+    /* ── Form controls ── */
+    .form-label { font-size: .82rem; font-weight: 500; color: var(--muted); margin-bottom: 5px; }
+    .form-control, .form-select {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 10px;
+      font-size: .9rem;
+      padding: 9px 13px;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .form-control:focus, .form-select:focus {
+      background: rgba(255,255,255,0.06);
+      border-color: var(--crimson);
+      box-shadow: 0 0 0 3px rgba(192,57,43,0.2);
+      color: var(--text);
+      outline: none;
+    }
+    .form-select option { background: var(--slate); }
+
+    /* ── Buttons ── */
+    .btn-crimson {
+      background: linear-gradient(135deg, var(--crimson), var(--crimson-l));
+      border: none; color: #fff; font-weight: 600; border-radius: 10px;
+      padding: 11px 24px; transition: .2s; font-size: .92rem;
+    }
+    .btn-crimson:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(192,57,43,0.4); color: #fff; }
+    .btn-crimson:active { transform: translateY(0); }
+    .btn-outline-c { border: 1px solid var(--crimson); color: var(--crimson-l); border-radius: 10px; padding: 11px 24px; font-weight: 600; font-size: .92rem; background: transparent; transition: .2s; }
+    .btn-outline-c:hover { background: rgba(192,57,43,0.12); color: var(--crimson-l); }
+
+    /* ── Result card ── */
+    #results-section { display: none; position: relative; z-index: 1; }
+    .result-verdict {
+      font-family: 'Syne', sans-serif; font-size: 1.9rem; font-weight: 800; letter-spacing: -0.5px;
+    }
+    .verdict-danger  { color: var(--danger); }
+    .verdict-warning { color: var(--warning); }
+    .verdict-success { color: var(--success); }
+
+    .risk-bar-wrap { height: 10px; background: rgba(255,255,255,0.08); border-radius: 99px; overflow: hidden; margin-top: 8px; }
+    .risk-bar { height: 100%; border-radius: 99px; transition: width 1.2s cubic-bezier(.4,0,.2,1); }
+    .risk-bar.danger  { background: linear-gradient(90deg, #C0392B, #E74C3C); }
+    .risk-bar.warning { background: linear-gradient(90deg, #D68910, #F39C12); }
+    .risk-bar.success { background: linear-gradient(90deg, #1E8449, #27AE60); }
+
+    .result-badge {
+      display: inline-flex; align-items: center; gap: 7px;
+      border-radius: 10px; padding: 8px 16px; font-size: .85rem; font-weight: 600;
+    }
+    .result-badge.danger  { background: rgba(231,76,60,0.15);  border: 1px solid rgba(231,76,60,0.35);  color: #E74C3C; }
+    .result-badge.warning { background: rgba(243,156,18,0.15); border: 1px solid rgba(243,156,18,0.35); color: #F39C12; }
+    .result-badge.success { background: rgba(39,174,96,0.15);  border: 1px solid rgba(39,174,96,0.35);  color: #27AE60; }
+
+    .model-tag { display: inline-flex; align-items: center; gap: 5px; font-size: .75rem; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); background: rgba(255,255,255,0.05); border-radius: 6px; padding: 3px 9px; }
+
+    /* ── Loading spinner ── */
+    .spinner-wrap { display: none; flex-direction: column; align-items: center; gap: 12px; padding: 40px 0; }
+    .spinner-wrap p { color: var(--muted); font-size: .9rem; }
+    .spinner-border { color: var(--crimson-l); width: 2.4rem; height: 2.4rem; border-width: 3px; }
+
+    /* ── Heartbeat animation on icon ── */
+    @keyframes heartbeat {
+      0%, 100% { transform: scale(1); }
+      14%       { transform: scale(1.22); }
+      28%       { transform: scale(1); }
+      42%       { transform: scale(1.15); }
+      56%       { transform: scale(1); }
+    }
+    .heartbeat { animation: heartbeat 1.6s ease-in-out infinite; display: inline-block; }
+
+    /* ── Page sections ── */
+    .page-section { display: none; }
+    .page-section.active { display: block; }
+
+    /* ── Stats strip ── */
+    .stat-item { text-align: center; padding: 18px; }
+    .stat-val  { font-family: 'Syne', sans-serif; font-size: 2rem; font-weight: 800; color: var(--crimson-l); }
+    .stat-lbl  { font-size: .8rem; color: var(--muted); margin-top: 2px; }
+
+    /* ── Info banner ── */
+    .info-banner { background: rgba(192,57,43,0.08); border-left: 3px solid var(--crimson); border-radius: 0 10px 10px 0; padding: 12px 16px; font-size: .88rem; color: var(--muted); }
+
+    /* ── Toast ── */
+    .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; }
+    .toast { background: var(--slate); border: 1px solid var(--border); color: var(--text); }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: var(--ink); } ::-webkit-scrollbar-thumb { background: var(--crimson-d); border-radius: 3px; }
+
+    /* ── Animate in ── */
+    .fade-in { opacity: 0; transform: translateY(18px); animation: fadeInUp .5s ease forwards; }
+    @keyframes fadeInUp { to { opacity: 1; transform: translateY(0); } }
+    .delay-1 { animation-delay: .08s; }
+    .delay-2 { animation-delay: .16s; }
+    .delay-3 { animation-delay: .24s; }
+    .delay-4 { animation-delay: .32s; }
+
+    footer { color: var(--muted); font-size: .8rem; border-top: 1px solid var(--border); padding: 24px 0; margin-top: 80px; position: relative; z-index: 1; }
+  </style>
+</head>
+<body>
+
+<div class="bg-blob"></div>
+
+<!-- Toast -->
+<div class="toast-container">
+  <div id="appToast" class="toast align-items-center border-0 rounded-3" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="d-flex">
+      <div class="toast-body" id="toastMsg">Error</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<!-- Navbar -->
+<nav class="navbar navbar-dark sticky-top" style="background: rgba(13,17,23,0.9); backdrop-filter: blur(14px); border-bottom: 1px solid var(--border); z-index: 100;">
+  <div class="container-xl">
+    <a class="navbar-brand d-flex align-items-center gap-2" href="#">
+      <span class="heartbeat" style="color:var(--crimson-l); font-size:1.3rem;">♥</span>
+      Cardio<span style="color:var(--crimson-l);">Scan</span> AI
+    </a>
+    <div class="d-flex gap-2">
+      <button class="nav-pill active" onclick="showSection('predict', this)">Predict</button>
+      <button class="nav-pill" onclick="showSection('about', this)">About</button>
+      <button class="nav-pill" onclick="showSection('api', this)">API Docs</button>
+    </div>
+  </div>
+</nav>
+
+<!-- ════════════════════ PREDICT SECTION ════════════════════ -->
+<div id="sec-predict" class="page-section active">
+  <div class="container-xl position-relative" style="z-index:1;">
+
+    <!-- Hero -->
+    <div class="hero">
+      <div class="hero-badge fade-in"><i class="bi bi-activity"></i> AI-Powered Cardiac Analysis</div>
+      <h1 class="fade-in delay-1">Predict Your <span>Heart<br>Disease Risk</span></h1>
+      <p class="lead mt-3 fade-in delay-2">Enter patient vitals below. Our dual-model engine — Logistic Regression + Isolation Forest — delivers a combined clinical risk verdict.</p>
+    </div>
+
+    <!-- Stats strip -->
+    <div class="glass-card mb-4 fade-in delay-2">
+      <div class="row g-0 text-center" style="border-bottom: 1px solid var(--border);">
+        <div class="col-4 stat-item" style="border-right:1px solid var(--border);">
+          <div class="stat-val">2</div><div class="stat-lbl">AI Models</div>
+        </div>
+        <div class="col-4 stat-item" style="border-right:1px solid var(--border);">
+          <div class="stat-val">13</div><div class="stat-lbl">Clinical Features</div>
+        </div>
+        <div class="col-4 stat-item">
+          <div class="stat-val">606</div><div class="stat-lbl">Training Records</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="info-banner mb-4 fade-in delay-3">
+      <i class="bi bi-shield-exclamation me-1"></i>
+      <strong>Disclaimer:</strong> This tool is for educational purposes only. Always consult a licensed medical professional for clinical decisions.
+    </div>
+
+    <div class="row g-4">
+      <!-- FORM -->
+      <div class="col-lg-7 fade-in delay-3">
+        <div class="glass-card p-4">
+          <div class="section-header"><i class="bi bi-clipboard-pulse me-2"></i>Patient Data Input</div>
+          <form id="predForm">
+            <div class="row g-3" id="formFields">
+              <!-- injected by JS -->
+            </div>
+            <div class="d-flex gap-2 mt-4 flex-wrap">
+              <button type="button" class="btn btn-crimson flex-grow-1" onclick="runPredict('combined')">
+                <i class="bi bi-cpu me-2"></i>Run Combined Analysis
+              </button>
+              <button type="button" class="btn btn-outline-c" onclick="runPredict('logistic')">LR Only</button>
+              <button type="button" class="btn btn-outline-c" onclick="runPredict('isolation-forest')">IF Only</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm ms-auto" onclick="resetForm()">
+                <i class="bi bi-arrow-counterclockwise"></i>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- RESULTS -->
+      <div class="col-lg-5">
+        <!-- Spinner -->
+        <div class="spinner-wrap" id="spinnerWrap">
+          <div class="spinner-border"></div>
+          <p>Analysing patient data…</p>
+        </div>
+
+        <!-- Placeholder -->
+        <div class="glass-card p-4 text-center fade-in delay-4" id="placeholder" style="min-height:320px; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+          <div style="font-size:3.5rem; color: rgba(192,57,43,0.25);" class="heartbeat">♥</div>
+          <p class="text-muted mt-3" style="font-size:.9rem;">Fill in patient vitals and hit <strong>Run Combined Analysis</strong> to see results.</p>
+        </div>
+
+        <!-- Result -->
+        <div id="results-section">
+          <!-- Combined result -->
+          <div class="glass-card p-4 mb-3" id="combinedCard" style="display:none;">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+              <div>
+                <div class="model-tag mb-2"><i class="bi bi-intersect"></i> Combined Verdict</div>
+                <div class="result-verdict" id="verdictText">—</div>
+              </div>
+              <div id="verdictBadge"></div>
+            </div>
+            <div class="row g-3 mt-1">
+              <div class="col-12">
+                <div class="d-flex justify-content-between mb-1">
+                  <small class="text-muted">LR Disease Probability</small>
+                  <small id="lrProbPct" class="fw-bold">—%</small>
+                </div>
+                <div class="risk-bar-wrap"><div class="risk-bar" id="lrBar" style="width:0"></div></div>
+              </div>
+              <div class="col-12">
+                <div class="d-flex justify-content-between mb-1">
+                  <small class="text-muted">IF Anomaly Score</small>
+                  <small id="ifScorePct" class="fw-bold">—%</small>
+                </div>
+                <div class="risk-bar-wrap"><div class="risk-bar" id="ifBar" style="width:0"></div></div>
+              </div>
+            </div>
+            <hr style="border-color:var(--border); margin: 14px 0;">
+            <div class="row g-2 text-center">
+              <div class="col-6">
+                <div class="glass-card p-3">
+                  <div class="model-tag mb-1 justify-content-center"><i class="bi bi-bar-chart-line"></i> Logistic Reg.</div>
+                  <div id="lrLabel" style="font-size:.85rem; font-weight:500; margin-top:5px;">—</div>
+                </div>
+              </div>
+              <div class="col-6">
+                <div class="glass-card p-3">
+                  <div class="model-tag mb-1 justify-content-center"><i class="bi bi-tree"></i> Isolation Forest</div>
+                  <div id="ifLabel" style="font-size:.85rem; font-weight:500; margin-top:5px;">—</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Standalone LR result -->
+          <div class="glass-card p-4 mb-3" id="lrCard" style="display:none;">
+            <div class="model-tag mb-2"><i class="bi bi-bar-chart-line"></i> Logistic Regression</div>
+            <div class="result-verdict" id="lrVerdictText">—</div>
+            <div class="row g-2 mt-3">
+              <div class="col-6">
+                <small class="text-muted d-block">No Disease</small>
+                <div class="risk-bar-wrap mt-1"><div class="risk-bar success" id="lrNoBar" style="width:0"></div></div>
+                <small id="lrNoPct">—%</small>
+              </div>
+              <div class="col-6">
+                <small class="text-muted d-block">Heart Disease</small>
+                <div class="risk-bar-wrap mt-1"><div class="risk-bar danger" id="lrDBar" style="width:0"></div></div>
+                <small id="lrDPct">—%</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Standalone IF result -->
+          <div class="glass-card p-4 mb-3" id="ifCard" style="display:none;">
+            <div class="model-tag mb-2"><i class="bi bi-tree"></i> Isolation Forest</div>
+            <div class="result-verdict" id="ifVerdictText">—</div>
+            <div class="mt-3">
+              <div class="d-flex justify-content-between mb-1">
+                <small class="text-muted">Anomaly Score</small>
+                <small id="ifScoreText" class="fw-bold">—</small>
+              </div>
+              <div class="risk-bar-wrap"><div class="risk-bar" id="ifSoloBar" style="width:0"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════ ABOUT SECTION ════════════════════ -->
+<div id="sec-about" class="page-section">
+  <div class="container-xl py-5 position-relative" style="z-index:1;">
+    <div class="hero-badge fade-in mb-4"><i class="bi bi-info-circle"></i> About This Project</div>
+    <h2 class="fade-in" style="font-family:'Syne',sans-serif; font-weight:800; font-size:2.2rem;">How CardioScan AI Works</h2>
+    <p class="text-muted mt-2 mb-5 fade-in">Two complementary ML models working in tandem to detect cardiac risk patterns.</p>
+    <div class="row g-4">
+      <div class="col-md-6 fade-in delay-1">
+        <div class="glass-card p-4 h-100">
+          <div class="mb-3" style="font-size:2.2rem; color:var(--crimson-l);">📈</div>
+          <h5 style="font-family:'Syne',sans-serif; font-weight:700;">Logistic Regression</h5>
+          <p class="text-muted mt-2" style="font-size:.9rem; line-height:1.7;">A supervised classification model trained on labelled heart disease records. It learns decision boundaries from 13 clinical features and outputs the probability that a patient has heart disease.</p>
+          <ul class="text-muted mt-3" style="font-size:.85rem; line-height:2; padding-left:18px;">
+            <li>Outputs class probabilities (0–100%)</li>
+            <li>Threshold-based binary classification</li>
+            <li>Scaled features via StandardScaler</li>
+          </ul>
+        </div>
+      </div>
+      <div class="col-md-6 fade-in delay-2">
+        <div class="glass-card p-4 h-100">
+          <div class="mb-3" style="font-size:2.2rem;">🌲</div>
+          <h5 style="font-family:'Syne',sans-serif; font-weight:700;">Isolation Forest</h5>
+          <p class="text-muted mt-2" style="font-size:.9rem; line-height:1.7;">An unsupervised anomaly detection algorithm. It isolates observations by randomly selecting features and splitting values. Anomalous data points — unusual patient profiles — require fewer splits and are flagged as outliers.</p>
+          <ul class="text-muted mt-3" style="font-size:.85rem; line-height:2; padding-left:18px;">
+            <li>No labels needed — unsupervised</li>
+            <li>Decision score → anomaly percentage</li>
+            <li>Complementary to LR classification</li>
+          </ul>
+        </div>
+      </div>
+      <div class="col-12 fade-in delay-3">
+        <div class="glass-card p-4">
+          <h5 style="font-family:'Syne',sans-serif; font-weight:700;" class="mb-3">Feature Descriptions</h5>
+          <div class="row g-2">
+            {% set descs = [
+              ("age","Patient age in years (29–77)"),
+              ("gender","0 = Female, 1 = Male"),
+              ("chest_pain_type","0=Typical Angina, 1=Atypical, 2=Non-anginal, 3=Asymptomatic"),
+              ("resting_blood_pressure","Resting BP in mmHg"),
+              ("serum_cholesterol","Cholesterol in mg/dl"),
+              ("fasting_blood_sugar","1 if FBS > 120 mg/dl, else 0"),
+              ("resting_ecg_results","ECG: 0=Normal, 1=ST-T abnormality, 2=LV hypertrophy"),
+              ("maximum_heart_rate","Max heart rate achieved during exercise"),
+              ("exercise_induced_angina","1 = Yes, 0 = No"),
+              ("st_depression","ST depression induced by exercise relative to rest"),
+              ("st_segment_slope","0=Upsloping, 1=Flat, 2=Downsloping"),
+              ("number_of_major_vessels","Major vessels coloured by fluoroscopy (0–4)"),
+              ("thalassemia_type","0=None, 1=Fixed defect, 2=Normal, 3=Reversible defect")
+            ] %}
+            {% for feat, desc in descs %}
+            <div class="col-md-6">
+              <div class="d-flex gap-2 p-2 rounded" style="background:rgba(255,255,255,0.03);">
+                <span style="color:var(--crimson-l); font-size:.8rem; margin-top:2px;">♦</span>
+                <div>
+                  <div style="font-size:.82rem; font-weight:600; color:var(--text);">{{ feat }}</div>
+                  <div style="font-size:.78rem; color:var(--muted);">{{ desc }}</div>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════ API DOCS SECTION ════════════════════ -->
+<div id="sec-api" class="page-section">
+  <div class="container-xl py-5 position-relative" style="z-index:1;">
+    <div class="hero-badge fade-in mb-4"><i class="bi bi-code-slash"></i> REST API Reference</div>
+    <h2 class="fade-in" style="font-family:'Syne',sans-serif; font-weight:800; font-size:2.2rem;">API Endpoints</h2>
+    <p class="text-muted mt-2 mb-5 fade-in">Base URL: <code style="color:var(--crimson-l);">http://localhost:5000</code></p>
+
+    {% set endpoints = [
+      ("GET","/api/health","Health check — confirms models are loaded","{}"),
+      ("GET","/api/features","Returns feature metadata (labels, types, ranges)","{}"),
+      ("POST","/api/predict/logistic","Logistic Regression prediction","{ \"age\":55, \"gender\":1, ... }"),
+      ("POST","/api/predict/isolation-forest","Isolation Forest anomaly detection","{ \"age\":55, \"gender\":1, ... }"),
+      ("POST","/api/predict/combined","Combined dual-model risk verdict","{ \"age\":55, \"gender\":1, ... }"),
+    ] %}
+    <div class="d-flex flex-column gap-3 fade-in delay-1">
+      {% for method, path, desc, body in endpoints %}
+      <div class="glass-card p-4">
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+          <span class="badge rounded-pill px-3 py-2 {% if method == 'GET' %}bg-primary{% else %}bg-danger{% endif %}" style="font-size:.78rem; font-family: monospace;">{{ method }}</span>
+          <code style="color:var(--crimson-l); font-size:.95rem;">{{ path }}</code>
+          <span class="text-muted" style="font-size:.88rem;">— {{ desc }}</span>
+        </div>
+        {% if method == 'POST' %}
+        <div class="mt-3 p-3 rounded" style="background:rgba(0,0,0,0.3); font-family:monospace; font-size:.82rem; color:#a8d8a8;">
+          POST {{ path }}<br>
+          Content-Type: application/json<br><br>
+          Body: all 13 feature fields as numbers<br>
+          e.g. { "age": 55, "gender": 1, "chest_pain_type": 2, ... }
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="glass-card p-4 mt-4 fade-in delay-2">
+      <h6 style="font-family:'Syne',sans-serif; font-weight:700;" class="mb-3">Example — Combined Prediction Response</h6>
+      <pre style="background:rgba(0,0,0,0.35); border-radius:10px; padding:16px; font-size:.82rem; color:#a8d8a8; overflow-x:auto;">{
+  "logistic_regression": {
+    "prediction": 1,
+    "label": "Heart Disease Detected",
+    "probability": { "no_disease": 23.5, "disease": 76.5 }
+  },
+  "isolation_forest": {
+    "is_anomaly": true,
+    "label": "Anomalous Pattern",
+    "anomaly_score": 68.2
+  },
+  "verdict": "High Risk",
+  "verdict_class": "danger"
+}</pre>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="container-xl text-center">
+    CardioScan AI &mdash; Mid-Semester ML Project &mdash; Built with Flask + Bootstrap 5
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+{# Inject Flask context into JS globals #}
+<script>
+  window.FEATURE_META = {{ features | tojson }};
+  window.FEATURE_COLS = {{ feature_columns | tojson }};
+</script>
+
+<script>
+const FEATURE_META = window.FEATURE_META || {};
+const FEATURE_COLS = window.FEATURE_COLS || [];
+
+// ── Build form dynamically ────────────────────────────────────────────────────
+function buildForm() {
+  const container = document.getElementById('formFields');
+  if (!container) { console.error('formFields not found'); return; }
+  if (!FEATURE_COLS.length) { console.error('FEATURE_COLS empty — Jinja2 injection missing!'); return; }
+
+  FEATURE_COLS.forEach(key => {
+    const meta = FEATURE_META[key];
+    if (!meta) { console.warn('No meta for key:', key); return; } // safe skip
+    const col = document.createElement('div');
+    col.className = 'col-md-6';
+    let input = '';
+    if (meta.type === 'select') {
+      const opts = Object.entries(meta.options).map(([v,l]) => `<option value="${v}">${l}</option>`).join('');
+      input = `<select class="form-select" id="f_${key}" name="${key}" required>${opts}</select>`;
+    } else {
+      input = `<input type="number" class="form-control" id="f_${key}" name="${key}"
+        min="${meta.min}" max="${meta.max}" step="${meta.step}" placeholder="${meta.min}" required>`;
+    }
+    col.innerHTML = `<label class="form-label" for="f_${key}">${meta.label}</label>${input}`;
+    container.appendChild(col);
+  });
+  console.log('buildForm done. Fields:', FEATURE_COLS.length);
+}
+buildForm();
+
+// ── Section nav ───────────────────────────────────────────────────────────────
+function showSection(name, el) {
+  document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-pill').forEach(p => p.classList.remove('active'));
+  document.getElementById('sec-' + name).classList.add('active');
+  if (el) el.classList.add('active');
+}
+
+// ── Collect form data ─────────────────────────────────────────────────────────
+function getFormData() {
+  const data = {};
+  let valid = true;
+  FEATURE_COLS.forEach(key => {
+    const el = document.getElementById('f_' + key);
+    const val = parseFloat(el.value);
+    if (el.value === '' || isNaN(val)) { el.classList.add('is-invalid'); valid = false; }
+    else { el.classList.remove('is-invalid'); data[key] = val; }
+  });
+  return valid ? data : null;
+}
+
+// ── Toast helper ──────────────────────────────────────────────────────────────
+function showToast(msg) {
+  document.getElementById('toastMsg').textContent = msg;
+  new bootstrap.Toast(document.getElementById('appToast'), { delay: 4000 }).show();
+}
+
+// ── Spinner helpers ───────────────────────────────────────────────────────────
+function showSpinner() {
+  document.getElementById('placeholder').style.display = 'none';
+  document.getElementById('results-section').style.display = 'none';
+  document.getElementById('spinnerWrap').style.display = 'flex';
+}
+function hideSpinner() { document.getElementById('spinnerWrap').style.display = 'none'; }
+
+// ── Reset ─────────────────────────────────────────────────────────────────────
+function resetForm() {
+  FEATURE_COLS.forEach(key => { const el = document.getElementById('f_' + key); if(el) { el.value=''; el.classList.remove('is-invalid'); } });
+  document.getElementById('results-section').style.display = 'none';
+  document.getElementById('placeholder').style.display = 'flex';
+  ['combinedCard','lrCard','ifCard'].forEach(id => document.getElementById(id).style.display = 'none');
+}
+
+// ── Bar animation ─────────────────────────────────────────────────────────────
+function animateBar(id, pct, cls) {
+  const bar = document.getElementById(id);
+  bar.className = 'risk-bar ' + cls;
+  setTimeout(() => bar.style.width = pct + '%', 50);
+}
+
+// ── Verdict styling ───────────────────────────────────────────────────────────
+const clsMap = { danger: 'verdict-danger', warning: 'verdict-warning', success: 'verdict-success' };
+const iconMap = { danger: 'bi-heartbreak', warning: 'bi-heart-pulse', success: 'bi-heart-fill' };
+
+// ── Main predict function ─────────────────────────────────────────────────────
+async function runPredict(mode) {
+  const data = getFormData();
+  if (!data) { showToast('Please fill in all fields correctly.'); return; }
+
+  showSpinner();
+  ['combinedCard','lrCard','ifCard'].forEach(id => document.getElementById(id).style.display='none');
+
+  const urlMap = {
+    'combined':         '/api/predict/combined',
+    'logistic':         '/api/predict/logistic',
+    'isolation-forest': '/api/predict/isolation-forest',
+  };
+
+  try {
+    const res = await fetch(urlMap[mode], {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    const json = await res.json();
+    if (!res.ok) { showToast(json.error || 'Server error'); hideSpinner(); return; }
+
+    hideSpinner();
+    document.getElementById('results-section').style.display = 'block';
+
+    if (mode === 'combined') renderCombined(json);
+    else if (mode === 'logistic') renderLR(json);
+    else renderIF(json);
+
+  } catch(e) {
+    hideSpinner();
+    showToast('Network error — is Flask running?');
+  }
+}
+
+function renderCombined(r) {
+  const vc = r.verdict_class;  // danger / warning / success
+  document.getElementById('verdictText').textContent = r.verdict;
+  document.getElementById('verdictText').className = 'result-verdict ' + clsMap[vc];
+  document.getElementById('verdictBadge').innerHTML =
+    `<span class="result-badge ${vc}"><i class="bi ${iconMap[vc]}"></i>${r.verdict}</span>`;
+
+  const lrPct = r.logistic_regression.probability.disease;
+  const ifPct = r.isolation_forest.anomaly_score;
+  document.getElementById('lrProbPct').textContent = lrPct + '%';
+  document.getElementById('ifScorePct').textContent = ifPct + '%';
+  animateBar('lrBar', lrPct, vc);
+  animateBar('ifBar', ifPct, vc);
+  document.getElementById('lrLabel').textContent = r.logistic_regression.label;
+  document.getElementById('ifLabel').textContent = r.isolation_forest.label;
+  document.getElementById('combinedCard').style.display = 'block';
+}
+
+function renderLR(r) {
+  const cls = r.prediction === 1 ? 'danger' : 'success';
+  document.getElementById('lrVerdictText').textContent = r.label;
+  document.getElementById('lrVerdictText').className = 'result-verdict ' + clsMap[cls];
+  const nd = r.probability.no_disease, d = r.probability.disease;
+  document.getElementById('lrNoPct').textContent = nd + '%';
+  document.getElementById('lrDPct').textContent = d + '%';
+  animateBar('lrNoBar', nd, 'success');
+  animateBar('lrDBar', d, 'danger');
+  document.getElementById('lrCard').style.display = 'block';
+}
+
+function renderIF(r) {
+  const cls = r.is_anomaly ? 'danger' : 'success';
+  document.getElementById('ifVerdictText').textContent = r.label;
+  document.getElementById('ifVerdictText').className = 'result-verdict ' + clsMap[cls];
+  document.getElementById('ifScoreText').textContent = r.anomaly_score + '%';
+  animateBar('ifSoloBar', r.anomaly_score, cls);
+  document.getElementById('ifCard').style.display = 'block';
+}
+</script>
+</body>
+</html>
