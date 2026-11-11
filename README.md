@@ -41,7 +41,7 @@ heart-disease-predictor/
 ### 1. Clone & install
 
 ```bash
-git clone https://github.com/<your-username>/heart-disease-predictor.git
+git clone https://github.com/maheerrr/heart-disease-predictor.git
 cd heart-disease-predictor
 
 python -m venv venv
